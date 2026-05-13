@@ -7,17 +7,20 @@
 
 ## Part 1 (5.5 marks)
 
-### Functional outcomes (3.0)
+Part 1 is **dependency installation only**, as in [Assignment — Part 1](03-assignment.md): add **`@uniswap/v4-core`** and **`@uniswap/v4-periphery`** with **Yarn** to the **appropriate workspace package** (typically the Hardhat/contracts package), following the [Uniswap v4 Core](https://github.com/Uniswap/v4-core) setup guidance.
 
-- **[3.0]** Required Part 1 functionality is present and behaves correctly.
+### Dependency installation (4.0)
 
-### Code clarity and documentation (1.5)
+- **[2.0]** `@uniswap/v4-core` appears as a dependency in that package’s `package.json` and is recorded in the Yarn lockfile (install via `yarn add` as required).
+- **[2.0]** `@uniswap/v4-periphery` is installed the same way in the **same** workspace package, with lockfile entries consistent with a normal Yarn install.
 
-- **[1.5]** Code is readable and comments are sufficient for review.
+### Correct package target (0.5)
+
+- **[0.5]** Dependencies are attached to the **intended** package.
 
 ### Verification (1.0)
 
-- **[1.0]** Part 1 verification checks pass.
+- **[1.0]** After install, the workspace still resolves dependencies and the project **compiles** (or the course’s Part 1 checks pass), indicating the libraries are usable where Part 2 onward expects them.
 
 ## Part 2 + Part 3 (34.5 marks)
 

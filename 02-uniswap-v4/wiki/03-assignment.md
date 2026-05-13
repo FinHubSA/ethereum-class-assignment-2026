@@ -14,11 +14,12 @@ Follow the official guide: [Uniswap v4 Core](https://github.com/Uniswap/v4-core)
 
 ### Requirements
 
-- [ ] **TODO:** Add the v4 core dependency to the appropriate workspace package.
+- [ ] **TODO:** Add the v4 core and v4 periphery dependency to the appropriate workspace package.
 - [ ] **TODO:** Install the package using **Yarn**:
 
 ```bash
 yarn add @uniswap/v4-core
+yarn add @uniswap/v4-periphery
 ```
 
 ### Deliverables
@@ -40,13 +41,15 @@ Implement a **smart contract** (in `02-uniswap-v4/packages/hardhat/contracts/`) 
 
 Use **`address(0)`** for **hooks**, so the pool key matches a no-hooks pool.
 
+For how Uniswap documents **`PoolKey`** construction (sorted currencies, fee in pips, tick spacing, hooks) and **`IPoolManager.initialize(pool, startingPrice)`** with **`sqrtPriceX96`**, see the official guide: [Create Pool — Uniswap v4](https://developers.uniswap.org/docs/protocols/v4/guides/create-pool).
+
 ### Requirements
 
-- [ ] **TODO:** Use **`FNBToken`** (`FNBT`) and **`PNPToken`** (`PNPT`) from the [`01-order-book`](../../01-order-book/) assignment as the two pool assets (deploy them in tests or reuse addresses as specified).
-- [ ] **Hint:** In your pool-creation contract, pass the required addresses into the **constructor** (at minimum: `PoolManager`, `PNPToken`, and `FNBToken`) and store them for later pool initialization/mint calls.
+- [ ] **TODO:** Copy **`FNBToken.sol`** and **`PNPToken.sol`** from [`01-order-book`](../../01-order-book/) into `02-uniswap-v4/packages/hardhat/contracts/`, then use those contracts as the two pool assets for this assignment.
+  - **Hint:** In your pool-creation contract, pass the required addresses into the **constructor** (at minimum: `PoolManager`, `PNPToken`, and `FNBToken`) and store them for later pool initialization/mint calls.
 - [ ] **TODO:** Initialize or register the pool through the v4 **`PoolManager`** flow with **fee tier 0.3%** (e.g. `3000` where applicable), **tick spacing `60`**, canonical **currency ordering**, and **hooks** as above.
 - [ ] **TODO:** Emit a dedicated **`event`** when a pool is successfully created or initialized (name it clearly, e.g. `PoolCreated` / `V4PoolInitialized`), including the fields needed to identify the pool (tokens, fee, tick spacing, hooks address, and any `PoolId` / key material your design uses).
-- [ ] **Hint:** Method modifiers (for example access-control modifiers like `onlyOwner`) can be used where appropriate; include comments explaining **why** a modifier was used on a method.
+  - **Hint:** Method modifiers (for example access-control modifiers like `onlyOwner`) can be used where appropriate; include comments explaining **why** a modifier was used on a method.
 - [ ] **TODO:** Add comments for public/external methods and for non-obvious logic inside functions.
 
 ### Deliverables
@@ -69,14 +72,27 @@ Use these **notional ZAR values** when choosing prices and ticks:
 
 From those assumptions, the **ZAR-equivalent spot notion** is **1 `FNBT` ≡ 10 `PNPT`** (R0.10 vs R0.01 per unit). Your pool may order tokens as `currency0` / `currency1`; convert that ratio into the correct **Uniswap sqrt price / tick** for your pair orientation.
 
-### Requirements
+### Requirements (`mintLiquidity` only)
 
-- [ ] **TODO:** In the **same contract** as Part 2, implement a function (or internal flow) that **mints** a v4 **liquidity position** with non-zero liquidity in the pool you created.
-- [ ] **TODO:** Emit a dedicated **`event`** when liquidity is minted (name it clearly, e.g. `LiquidityMinted`), including the pool identity, **tick bounds**, **liquidity** amount, and (if applicable) **position id** / owner so a listener can reconstruct what was added.
-- [ ] **TODO:** Mint liquidity on the **same pool** as Part 2 (**0.3%** fee, tick spacing **`60`**). Choose **`tickLower`** and **`tickUpper`** (multiples of **`60`**) so the range **includes the tick** implied by the **R0.10-notional `FNBT` vs R0.01-notional `PNPT`** relationship above (i.e. the range must **cover** that relative price, with sensible margin).
-- [ ] **TODO:** Document in comments which token you treated as `currency0` / `currency1` and how you mapped ZAR notionals to `sqrtPriceX96` / ticks.
-- [ ] **TODO:** Ensure all Part 2 and Part 3 tests pass.
-- [ ] **Note:** For any figure that comes from a calculation (for example price ratios, ticks, `sqrtPriceX96`, liquidity amounts, bounds), include a short code/comment note that shows the calculation used.
+Each **TODO** title matches a step comment in **`RewardTokensManager.mintLiquidity`** (`1)` … `9)`).
+
+- [ ] **TODO:** Validate user inputs and tick constraints.
+  - **Hint:** Check amounts and ticks
+- [ ] **TODO:** Ensure the chosen range includes the target tick for the tokens liquidity pool.
+  - **Hint:** Derive **`targetTick`** from the **1 FNBT ≡ 10 PNPT** notion (`price = (currency0 / currency1) = 1.0001^tick`)
+- [ ] **TODO:** Resolve and verify the liquidity pool.
+  - **Hint:** Get the **`poolId`** by first creating the pool key then using `key.toId()` method.
+- [ ] **TODO:** Compute liquidity from desired token amounts at the current pool price.
+  - **Hint:** Use `LiquidityAmounts.getLiquidityForAmounts` method. sqrtPriceX96 can be obtained from the poolManager using `poolManager.getSlot0(poolId)`
+- [ ] **TODO:** Pull desired token amounts from owner into this manager.
+  - **Hint:** Use **`IERC20.transferFrom(msg.sender, address(this), amount)`** for **`currency0` / `currency1`** when the corresponding desired amount is non-zero; the caller must **`approve`** your contract on both tokens first.
+- [ ] **TODO:** Approve Permit2 so PositionManager can settle pool deltas.
+  - **Hint:** Uniswap V4 uses Permit2 contract to settle the currency pairs. You can read more [here](https://github.com/dragonfly-xyz/useful-solidity-patterns/tree/main/patterns/permit2#permit2-model). This won't be examined, you just need to know how to use it for minting.
+- [ ] **TODO:** Prepare PositionManager mint actions and execute modifyLiquidities.
+  - **Hint:** Look at this [guide](https://developers.uniswap.org/docs/protocols/v4/guides/create-pool#guide-create-a-pool-and-add-liquidity)
+- [ ] **TODO:** Verify mint succeeded.
+- [ ] **TODO:** Return any unspent token dust and emit assignment event.
+  - **Hint:** After mint, **`transfer`** any remaining **`currency0` / `currency1`** balances on your contract to **`msg.sender`**; then **`emit LiquidityMinted(poolId, positionId, msg.sender, tickLower, tickUpper, liquidity)`**.
 
 ### Deliverables
 
@@ -90,13 +106,13 @@ From those assumptions, the **ZAR-equivalent spot notion** is **1 `FNBT` ≡ 10 
 From the `02-uniswap-v4` folder:
 
 ```bash
-yarn hardhat:test test/YourTestFile.ts
+yarn hardhat:test test/AssignmentSolution.ts
 ```
 
 Or from `02-uniswap-v4/packages/hardhat`:
 
 ```bash
-yarn test test/YourTestFile.ts
+yarn test test/AssignmentSolution.ts
 ```
 
 ## Submission checklist

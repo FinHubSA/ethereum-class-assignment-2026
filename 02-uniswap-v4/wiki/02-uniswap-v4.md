@@ -34,27 +34,24 @@ Every pool is distinguished by **four** fields that must all agree for two calls
 | **Tick spacing** | Which **tick** grid the pool uses for prices and liquidity steps. Spacing is tied to how the pool steps through `sqrtPrice` and which ticks may hold liquidity; different spacing ⇒ different pool.                                   |
 | **Hooks**        | The address of the optional **hooks** contract for that pool, or the **zero address** if there are no hooks. Same pair, fee, and tick spacing but a different hooks contract (including `no hooks` vs `some hooks`) ⇒ different pool. |
 
-For a practical explanation of how **price relates to ticks**, see [Introducing ticks in Uniswap V3 (RareSkills)](https://rareskills.io/post/uniswap-v3-ticks).  
-For a practical guide on converting a **price into an initializable tick**, see [How to convert a price to a tick that can be initialized (Uniswap Support)](https://support.uniswap.org/hc/en-us/articles/21068898875661-How-to-convert-a-price-to-a-tick-that-can-be-initialized).
-
 Swaps, mints, burns, and donations all pass this **full key** so the `PoolManager` updates the correct pool. LP **positions** (concentrated ranges) are attached to that same pool identity; they are not a substitute for the key—two positions only share liquidity if they sit on the **same** pool key.
 
 ### [Non Fungible Liquidity](https://blog.uniswap.org/uniswap-v3#nonfungible-liquidity)
 
 A **liquidity pool** is not a single blob of capital: it is the **sum of many separate liquidity positions** on the same pool key. Each **position** supplies active depth only between its own **`tickLower`** and **`tickUpper`**; at any on-chain price, the pool’s effective depth is the **aggregate** of all positions whose ranges **contain** the current tick. Different LPs (or the same LP) can stack narrow bands, wide bands, or multiple disjoint ranges on one pool.
 
-As a byproduct of per-LP custom price curves, those positions are **not fungible** with each other and are **not** represented as a single shared ERC-20 pool share in the core protocol. Instead, each minted position is tracked as its own record—commonly surfaced to users as an **NFT** (a unique `tokenId`) or an equivalent **position id** from the position manager—so you can modify or burn **your** liquidity without touching someone else’s.
+As a byproduct of per-LP custom price curves, those positions are **not fungible** with each other and are **not** represented as a single shared ERC-20 pool share in the core protocol. Instead, each minted position is tracked as its own record—commonly surfaced to users as an **NFT** (a unique `tokenId`) or an equivalent **position id** from the position manager—so you can modify or burn **your** liquidity without touching someone else’s. In the v4 periphery, this NFT is implemented by **`PositionManager`**, which is the **ERC721** contract that mints the position token.
 
 **What makes a liquidity position unique**
 
 Two positions are the **same** on-chain position only if they share the **same** identity the protocol assigns. In practice, a **unique liquidity position** is defined by things like:
 
-| Aspect | Role |
-|--------|------|
-| **Pool** | The full **pool key** (token pair, fee, tick spacing, hooks). Positions on different pools are always different positions. |
-| **Price range** | **`tickLower`** and **`tickUpper`** bound where this position’s liquidity is active. Same pool but a different range ⇒ a different position (when minted as a new position). |
-| **Position id** | The protocol’s **unique handle** for that mint—often an **NFT `tokenId`**. A new mint gets a new id; that id is what wallets and contracts use to **increase**, **decrease**, **collect fees**, or **burn** that specific slice of liquidity. |
-| **Owner (custody)** | The address holding the position NFT controls that position; ownership can transfer without merging two positions into one. |
+| Aspect              | Role                                                                                                                                                                                                                                          |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Pool**            | The full **pool key** (token pair, fee, tick spacing, hooks). Positions on different pools are always different positions.                                                                                                                    |
+| **Price range**     | **`tickLower`** and **`tickUpper`** bound where this position’s liquidity is active. Same pool but a different range ⇒ a different position (when minted as a new position).                                                                  |
+| **Position id**     | The protocol’s **unique handle** for that mint—often an **NFT `tokenId`**. A new mint gets a new id; that id is what wallets and contracts use to **increase**, **decrease**, **collect fees**, or **burn** that specific slice of liquidity. |
+| **Owner (custody)** | The address holding the position NFT controls that position; ownership can transfer without merging two positions into one.                                                                                                                   |
 
 So: one **pool** ↔ many **positions**; one **position** ↔ one **range** (per mint) + one **position id** on one **pool**. Wrappers can bundle or fractionalize NFTs into fungible ERC-20 products, but the **core** idea remains: liquidity is **positioned** and **non-fungible** at the protocol level.
 
@@ -63,6 +60,23 @@ Additionally, trading fees are no longer automatically reinvested into the pool 
 ### Singleton and `PoolManager`
 
 Earlier versions deployed **one pool contract per pair** (and per fee tier in v3). In v4, many pools are managed by a **single** `PoolManager` (singleton) contract. That reduces deployment cost and enables a unified interface for swaps, liquidity changes, and donations across pools.
+
+### `PositionManager` and Permit2 (minting positions)
+
+In practice, new liquidity positions are minted through the **`PositionManager`** contract in the **v4 periphery** library (not by calling core pool logic directly). This is the contract that batches actions like:
+
+1. mint a position (`MINT_POSITION`)
+2. settle required token deltas (`SETTLE_PAIR`)
+
+`PositionManager` uses the **Permit2 pattern** for token movement. The important mental model for this assignment is:
+
+- your manager contract (or user) approves tokens to **Permit2**
+- then `PositionManager` calls into Permit2
+- Permit2 is the component that ultimately performs the token `transferFrom` flow
+
+So when liquidity minting needs token spend permission, the spender you must account for is the Permit2 path used by `PositionManager`, not just `PositionManager` alone.
+
+Understanding the full Permit2 signature/nonce/expiry model is **out of scope** here; treat it as a safer and more reusable approval layer that sits between applications and ERC-20 transfers.
 
 ### Hooks (Not examined)
 
@@ -76,5 +90,3 @@ v4 uses **flash accounting**: operations like swaps can **net** debits and credi
 
 - [Uniswap v4 overview](https://docs.uniswap.org/contracts/v4/overview)
 - [Uniswap v4 whitepaper / technical deep dives](https://uniswap.org/) (see official blog and docs for the latest links)
-- [Introducing ticks in Uniswap V3 (RareSkills)](https://rareskills.io/post/uniswap-v3-ticks)
-- [How to convert a price to a tick that can be initialized (Uniswap Support)](https://support.uniswap.org/hc/en-us/articles/21068898875661-How-to-convert-a-price-to-a-tick-that-can-be-initialized)
